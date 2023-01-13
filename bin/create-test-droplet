@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+
+main() {
+  declare ISSUE_ID="$1"
+  local artifact_id commit_sha droplet_id droplet_json ip_address response run_id
+
+  if [[ -z "$ISSUE_ID" ]]; then
+    echo " !     Missing ISSUE_ID argument" 1>&2
+    return 1
+  fi
+
+  if [[ -z "$GITHUB_TOKEN" ]]; then
+    echo " !     Missing GITHUB_TOKEN environment variable" 1>&2
+    return 1
+  fi
+
+  if [[ -z "$DIGITALOCEAN_TOKEN" ]]; then
+    echo " !     Missing DIGITALOCEAN_TOKEN environment variable" 1>&2
+    return 1
+  fi
+
+  if [[ -z "$DIGITALOCEAN_VPC_UUID" ]]; then
+    echo " !     Missing DIGITALOCEAN_VPC_UUID environment variable" 1>&2
+    return 1
+  fi
+
+  if [[ -z "$DIGITALOCEAN_PROJECT_ID" ]]; then
+    echo " !     Missing DIGITALOCEAN_PROJECT_ID environment variable" 1>&2
+    return 1
+  fi
+
+  if [[ -z "$DIGITALOCEAN_SSH_KEY_ID" ]]; then
+    echo " !     Missing DIGITALOCEAN_SSH_KEY_ID environment variable" 1>&2
+    return 1
+  fi
+
+  echo "=====> fetching artifact info"
+  response="$(curl -s -H "Accept: application/vnd.github+json" -H "Authorization: Bearer $GITHUB_TOKEN" https://api.github.com/repos/dokku/dokku/pulls/${ISSUE_ID})"
+  commit_sha="$(echo "$response" | jq -r '.head.sha')"
+  if [[ -z "$commit_sha" ]]; then
+    echo " !     Unable to fetch commit sha" 1>&2
+    return 1
+  fi
+  echo "       commit sha: $commit_sha"
+
+  response="$(curl -s -H "Accept: application/vnd.github+json" -H "Authorization: Bearer $GITHUB_TOKEN" "https://api.github.com/repos/dokku/dokku/actions/runs?head_sha=${commit_sha}")"
+  run_id="$(echo "$response" | jq -r '.workflow_runs[] | select(.name == "CI") | .id')"
+  if [[ -z "$run_id" ]]; then
+    echo " !     Unable to fetch run id" 1>&2
+    return 1
+  fi
+  echo "       run_id: $run_id"
+
+  response="$(curl -s -H "Accept: application/vnd.github+json" -H "Authorization: Bearer $GITHUB_TOKEN" "https://api.github.com/repos/dokku/dokku/actions/runs/${run_id}/artifacts")"
+  artifact_id="$(echo "$response" | jq -r '.artifacts[] | select(.name == "build") | .id')"
+  if [[ -z "$artifact_id" ]]; then
+    echo " !     Unable to fetch artifact id" 1>&2
+    return 1
+  fi
+  echo "       artifact_id: $artifact_id"
+
+  user_data="$(sed "s/GITHUB_TOKEN/$GITHUB_TOKEN/; s/ARTIFACT_ID/$artifact_id/" user-data.bash)"
+
+  droplet_json='{}'
+  droplet_json="$(echo "$droplet_json" | jq --arg value "issue-${ISSUE_ID}" '. + {name: $value}')"
+  droplet_json="$(echo "$droplet_json" | jq --arg value "s-1vcpu-1gb" '. + {size: $value}')"
+  droplet_json="$(echo "$droplet_json" | jq --arg value "nyc1" '. + {region: $value}')"
+  droplet_json="$(echo "$droplet_json" | jq --arg value "ubuntu-22-04-x64" '. + {image: $value}')"
+  droplet_json="$(echo "$droplet_json" | jq --arg value "$DIGITALOCEAN_VPC_UUID" '. + {vpc_uuid: $value}')"
+  droplet_json="$(echo "$droplet_json" | jq --arg value "$user_data" '. + {user_data: $value}')"
+  droplet_json="$(echo "$droplet_json" | jq --arg value "issue:${ISSUE_ID}" '. + {tags: [$value]}')"
+  droplet_json="$(echo "$droplet_json" | jq --arg value "$DIGITALOCEAN_SSH_KEY_ID" '. + {ssh_keys: [$value]}')"
+
+  echo "=====> creating droplet"
+  response="$(curl -s -X POST -H 'Content-Type: application/json' -H "Authorization: Bearer $DIGITALOCEAN_TOKEN" -d "$droplet_json" "https://api.digitalocean.com/v2/droplets")"
+  droplet_id="$(echo "$response" | jq -r '.droplet.id')"
+  if [[ -z "$droplet_id" ]] || [[ "$droplet_id" == "null" ]]; then
+    echo " !     Unable to fetch droplet id" 1>&2
+    echo "       $response"
+    return 1
+  fi
+  echo "       droplet_id: $droplet_id"
+
+  echo "=====> assigning droplet to project"
+  response="$(curl -s -X POST -H "Content-Type: application/json" -H "Authorization: Bearer $DIGITALOCEAN_TOKEN" -d "{\"resources\": [\"do:droplet:$droplet_id\"]}" "https://api.digitalocean.com/v2/projects/$DIGITALOCEAN_PROJECT_ID/resources")"
+  status="$(echo "$response" | jq -r '.resources[0].status')"
+  echo "       status: $status"
+
+  echo "=====> waiting until droplet is ready"
+  echo -n "       "
+  while true; do
+    response="$(curl -s -X GET -H "Content-Type: application/json" -H "Authorization: Bearer $DIGITALOCEAN_TOKEN" "https://api.digitalocean.com/v2/droplets/${droplet_id}")"
+    status="$(echo "$response" | jq -r '.droplet.status')"
+    if [[ -z "$status" ]]; then
+      echo " !     Unable to fetch droplet status" 1>&2
+      return 1
+    fi
+
+    if [[ "$status" == "active" ]]; then
+      ip_address="$(echo "$response" | jq -r '.droplet.networks.v4[] | select(.type == "public") | .ip_address')"
+      echo ""
+      echo ""
+      echo "ssh -o 'StrictHostKeyChecking no' root@$ip_address"
+      echo "tail -f /var/log/cloud-init-output.log"
+      break
+    fi
+
+    echo -n "."
+    sleep 2
+  done
+}
+
+main "$@"

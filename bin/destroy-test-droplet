@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+
+main() {
+  declare ISSUE_ID="$1"
+  local droplet_id response
+
+  if [[ -z "$ISSUE_ID" ]]; then
+    echo " !     Missing ISSUE_ID argument" 1>&2
+    return 1
+  fi
+
+  if [[ -z "$DIGITALOCEAN_TOKEN" ]]; then
+    echo " !     Missing DIGITALOCEAN_TOKEN environment variable" 1>&2
+    return 1
+  fi
+
+  echo "=====> fetching droplet"
+  response="$(curl -s -X GET -H "Content-Type: application/json" -H "Authorization: Bearer $DIGITALOCEAN_TOKEN" "https://api.digitalocean.com/v2/droplets?tag_name=issue:${ISSUE_ID}")"
+  droplet_id="$(echo "$response" | jq -r '.droplets[0].id')"
+  if [[ -z "$droplet_id" ]]; then
+    echo " !     Unable to fetch droplet id" 1>&2
+    return 1
+  fi
+  echo "       droplet id: $droplet_id"
+
+  echo "=====> destroying droplet"
+  curl -X DELETE -H "Content-Type: application/json" -H "Authorization: Bearer $DIGITALOCEAN_TOKEN" "https://api.digitalocean.com/v2/droplets/${droplet_id}"
+  echo "=====> droplet destroyed!"
+}
+
+main "$@"
