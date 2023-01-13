@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 main() {
-  declare ISSUE_ID="$1"
+  declare ISSUE_ID="$1" USER_DATA_FILE="${2:-pr}"
   local artifact_id commit_sha droplet_id droplet_json ip_address response run_id
 
   if [[ -z "$ISSUE_ID" ]]; then
@@ -34,32 +34,36 @@ main() {
     return 1
   fi
 
-  echo "=====> fetching artifact info"
-  response="$(curl -s -H "Accept: application/vnd.github+json" -H "Authorization: Bearer $GITHUB_TOKEN" https://api.github.com/repos/dokku/dokku/pulls/${ISSUE_ID})"
-  commit_sha="$(echo "$response" | jq -r '.head.sha')"
-  if [[ -z "$commit_sha" ]]; then
-    echo " !     Unable to fetch commit sha" 1>&2
-    return 1
-  fi
-  echo "       commit sha: $commit_sha"
+  if [[ "$USER_DATA_FILE" == "pr" ]]; then
+    echo "=====> fetching artifact info"
+    response="$(curl -s -H "Accept: application/vnd.github+json" -H "Authorization: Bearer $GITHUB_TOKEN" "https://api.github.com/repos/dokku/dokku/pulls/${ISSUE_ID}")"
+    commit_sha="$(echo "$response" | jq -r '.head.sha')"
+    if [[ -z "$commit_sha" ]]; then
+      echo " !     Unable to fetch commit sha" 1>&2
+      return 1
+    fi
+    echo "       commit sha: $commit_sha"
 
-  response="$(curl -s -H "Accept: application/vnd.github+json" -H "Authorization: Bearer $GITHUB_TOKEN" "https://api.github.com/repos/dokku/dokku/actions/runs?head_sha=${commit_sha}")"
-  run_id="$(echo "$response" | jq -r '.workflow_runs[] | select(.name == "CI") | .id')"
-  if [[ -z "$run_id" ]]; then
-    echo " !     Unable to fetch run id" 1>&2
-    return 1
-  fi
-  echo "       run_id: $run_id"
+    response="$(curl -s -H "Accept: application/vnd.github+json" -H "Authorization: Bearer $GITHUB_TOKEN" "https://api.github.com/repos/dokku/dokku/actions/runs?head_sha=${commit_sha}")"
+    run_id="$(echo "$response" | jq -r '.workflow_runs[] | select(.name == "CI") | .id')"
+    if [[ -z "$run_id" ]]; then
+      echo " !     Unable to fetch run id" 1>&2
+      return 1
+    fi
+    echo "       run_id: $run_id"
 
-  response="$(curl -s -H "Accept: application/vnd.github+json" -H "Authorization: Bearer $GITHUB_TOKEN" "https://api.github.com/repos/dokku/dokku/actions/runs/${run_id}/artifacts")"
-  artifact_id="$(echo "$response" | jq -r '.artifacts[] | select(.name == "build") | .id')"
-  if [[ -z "$artifact_id" ]]; then
-    echo " !     Unable to fetch artifact id" 1>&2
-    return 1
+    response="$(curl -s -H "Accept: application/vnd.github+json" -H "Authorization: Bearer $GITHUB_TOKEN" "https://api.github.com/repos/dokku/dokku/actions/runs/${run_id}/artifacts")"
+    artifact_id="$(echo "$response" | jq -r '.artifacts[] | select(.name == "build") | .id')"
+    if [[ -z "$artifact_id" ]]; then
+      echo " !     Unable to fetch artifact id" 1>&2
+      return 1
+    fi
+    echo "       artifact_id: $artifact_id"
+  else
+    artifact_id="none"
   fi
-  echo "       artifact_id: $artifact_id"
 
-  user_data="$(sed "s/GITHUB_TOKEN/$GITHUB_TOKEN/; s/ARTIFACT_ID/$artifact_id/" user-data.bash)"
+  user_data="$(sed "s/GITHUB_TOKEN/$GITHUB_TOKEN/; s/ARTIFACT_ID/$artifact_id/" "user-data/$USER_DATA_FILE.bash")"
 
   droplet_json='{}'
   droplet_json="$(echo "$droplet_json" | jq --arg value "issue-${ISSUE_ID}" '. + {name: $value}')"

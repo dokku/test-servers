@@ -17,9 +17,15 @@ Manages test servers on Digitalocean for Dokku pull requests.
 # - DIGITALOCEAN_SSH_KEY_ID
 # - GITHUB_TOKEN
 
-# create a server
-bin/create-test-droplet 5495
+# create and destroy a server based on a PR
+bin/create-test-droplet "5495"
+bin/destroy-test-droplet "5495"
 
-# destroy it
-bin/destroy-test-droplet 5495
+# create one for a given issue that installs latest dokku
+bin/create-test-droplet 4782 "issue"
+bin/destroy-test-droplet 4782 "issue"
+
+# create a server from a source install
+bin/create-test-droplet 4782 "source"
+bin/destroy-test-droplet 4782 "source"
 ```
