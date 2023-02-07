@@ -90,7 +90,7 @@ main() {
   status="$(echo "$response" | jq -r '.resources[0].status')"
   echo "       status: $status"
 
-  echo "=====> waiting until droplet is ready"
+  echo "=====> waiting until droplet is active"
   echo -n "       "
   while true; do
     response="$(curl -s -X GET -H "Content-Type: application/json" -H "Authorization: Bearer $DIGITALOCEAN_TOKEN" "https://api.digitalocean.com/v2/droplets/${droplet_id}")"
@@ -103,15 +103,27 @@ main() {
     if [[ "$status" == "active" ]]; then
       ip_address="$(echo "$response" | jq -r '.droplet.networks.v4[] | select(.type == "public") | .ip_address')"
       echo ""
+      echo "       server is active, run the following command to check progress"
+      echo "       ssh -o 'StrictHostKeyChecking no' root@$ip_address tail -f /var/log/cloud-init-output.log"
+      echo "=====> waiting until dokku is installed"
+      echo -n "       "
+
+      while true; do
+        if ssh -o 'ConnectTimeout 10' -o 'BatchMode yes' -o 'StrictHostKeyChecking no' "root@$ip_address" which dokku >/dev/null 2>&1; then
+          break
+        fi
+        echo -n "."
+        sleep 10
+      done
       echo ""
-      echo "ssh -o 'StrictHostKeyChecking no' root@$ip_address"
-      echo "tail -f /var/log/cloud-init-output.log"
       break
     fi
 
     echo -n "."
     sleep 2
   done
+  echo "-----> Done!"
+  echo "       ssh -o 'StrictHostKeyChecking no' root@$ip_address"
 }
 
 main "$@"
