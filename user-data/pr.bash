@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -eo pipefail
 
 sudo apt-get update -qq >/dev/null
 sudo apt-get -qq -y --no-install-recommends install apt-transport-https build-essential git unzip
