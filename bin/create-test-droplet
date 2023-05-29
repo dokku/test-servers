@@ -2,7 +2,7 @@
 
 main() {
   declare ISSUE_ID="$1" USER_DATA_FILE="${2:-pr}"
-  local artifact_id commit_sha droplet_id droplet_json ip_address response run_id
+  local artifact_id commit_ref commit_sha droplet_id droplet_json ip_address response run_id
 
   if [[ -z "$ISSUE_ID" ]]; then
     echo " !     Missing ISSUE_ID argument" 1>&2
@@ -37,6 +37,13 @@ main() {
   if [[ "$USER_DATA_FILE" == "pr" ]]; then
     echo "=====> fetching artifact info"
     response="$(curl -s -H "Accept: application/vnd.github+json" -H "Authorization: Bearer $GITHUB_TOKEN" "https://api.github.com/repos/dokku/dokku/pulls/${ISSUE_ID}")"
+    commit_ref="$(echo "$response" | jq -r '.head.ref')"
+    if [[ -z "$commit_ref" ]]; then
+      echo " !     Unable to fetch commit sha" 1>&2
+      return 1
+    fi
+    echo "       commit_ref sha: $commit_ref"
+
     commit_sha="$(echo "$response" | jq -r '.head.sha')"
     if [[ -z "$commit_sha" ]]; then
       echo " !     Unable to fetch commit sha" 1>&2
@@ -63,7 +70,7 @@ main() {
     artifact_id="none"
   fi
 
-  user_data="$(sed "s/GITHUB_TOKEN/$GITHUB_TOKEN/; s/ARTIFACT_ID/$artifact_id/" "user-data/$USER_DATA_FILE.bash")"
+  user_data="$(sed "s/GITHUB_TOKEN/$GITHUB_TOKEN/; s/COMMIT_REF/$commit_ref/; s/ARTIFACT_ID/$artifact_id/" "user-data/$USER_DATA_FILE.bash")"
 
   droplet_json='{}'
   droplet_json="$(echo "$droplet_json" | jq --arg value "issue-${ISSUE_ID}" '. + {name: $value}')"

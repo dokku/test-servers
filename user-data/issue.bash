@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 
 sudo apt-get update -qq >/dev/null
-sudo apt-get -qq -y --no-install-recommends install apt-transport-https unzip
+sudo apt-get -qq -y --no-install-recommends install apt-transport-https build-essential git unzip
+
+# clone the repo
+git clone https://github.com/dokku/dokku.git /root/dokku
 
 # install docker
 wget -nv -O - https://get.docker.com/ | sh
@@ -21,3 +24,8 @@ echo "dokku dokku/skip_key_file boolean false" | sudo debconf-set-selections
 echo "dokku dokku/key_file string /root/.ssh/authorized_keys" | sudo debconf-set-selections
 echo "dokku dokku/nginx_enable boolean true" | sudo debconf-set-selections
 sudo apt-get -qq -y install dokku
+
+# install test devtools
+pushd /root/dokku
+make ci-dependencies setup-deploy-tests
+popd
