@@ -133,8 +133,12 @@ main() {
   local remote
   remote="$(echo "$ip_address" | iconv -t ascii//TRANSLIT | sed -E -e 's/[^[:alnum:]]+/-/g' -e 's/^-+|-+$//g' | tr '[:upper:]' '[:lower:]')"
   echo "-----> Done!"
-  echo "       ssh -o 'StrictHostKeyChecking no' root@$ip_address"
-  echo "       git remote add dokku-$remote dokku@$ip_address:app"
+  echo "       SSH Access:"
+  echo "         ssh -o 'StrictHostKeyChecking no' root@$ip_address"
+  echo "       VSCode Access:"
+  echo "         ssh root@$ip_address -A"
+  echo "       Dokku App Remote:"
+  echo "         git remote add dokku-$remote dokku@$ip_address:app"
 }
 
 main "$@"
