@@ -2,7 +2,7 @@
 
 main() {
   declare ISSUE_ID="$1" USER_DATA_FILE="${2:-pr}"
-  local artifact_id commit_ref commit_sha droplet_id droplet_json ip_address response run_id
+  local artifact_id commit_ref commit_sha droplet_id droplet_json hosted_zone_id ip_address response route53_json run_id
 
   if [[ -z "$ISSUE_ID" ]]; then
     echo " !     Missing ISSUE_ID argument" 1>&2
@@ -70,7 +70,7 @@ main() {
     artifact_id="none"
   fi
 
-  user_data="$(sed "s/GITHUB_TOKEN/$GITHUB_TOKEN/; s/COMMIT_REF/$commit_ref/; s/ARTIFACT_ID/$artifact_id/" "user-data/$USER_DATA_FILE.bash")"
+  user_data="$(sed "s/GITHUB_TOKEN/$GITHUB_TOKEN/; s/ISSUE_ID/$ISSUE_ID/; s/COMMIT_REF/$commit_ref/; s/ARTIFACT_ID/$artifact_id/" "user-data/$USER_DATA_FILE.bash")"
 
   droplet_json='{}'
   droplet_json="$(echo "$droplet_json" | jq --arg value "issue-${ISSUE_ID}" '. + {name: $value}')"
@@ -112,6 +112,17 @@ main() {
       echo ""
       echo "       server is active, run the following command to check progress"
       echo "       ssh -o 'StrictHostKeyChecking no' root@$ip_address tail -f /var/log/cloud-init-output.log"
+
+      echo "=====> creating dns records"
+      wildcard='*'
+      route53_json='{"Comment": "UPSERT a record", "Changes": [{"Action": "UPSERT","ResourceRecordSet": {"Name": "a.dokku.dev","Type": "A","TTL": 300,"ResourceRecords": [{ "Value": "127.0.0.1"}]}}, {"Action": "UPSERT","ResourceRecordSet": {"Name": "*.a.dokku.dev","Type": "A","TTL": 300,"ResourceRecords": [{ "Value": "127.0.0.1"}]}}]}'
+      route53_json="$(echo "$route53_json" | jq --arg value "${ISSUE_ID}.dokku.dev" '.Changes[0].ResourceRecordSet.Name = $value')"
+      route53_json="$(echo "$route53_json" | jq --arg value "${wildcard}.${ISSUE_ID}.dokku.dev" '.Changes[1].ResourceRecordSet.Name = $value')"
+      route53_json="$(echo "$route53_json" | jq --arg value "$ip_address" '.Changes[].ResourceRecordSet.ResourceRecords[].Value = $value')"
+      hosted_zone_id="$(aws route53 list-hosted-zones-by-name --dns-name dokku.dev --query "HostedZones[?Name=='dokku.dev.'].Id" --output text | cut -d '/' -f3)"
+      echo -n "       "
+      aws route53 change-resource-record-sets --hosted-zone-id "$hosted_zone_id" --change-batch "$route53_json" --output text
+
       echo "=====> waiting until dokku is installed"
       echo -n "       "
 
@@ -134,11 +145,11 @@ main() {
   remote="$(echo "$ip_address" | iconv -t ascii//TRANSLIT | sed -E -e 's/[^[:alnum:]]+/-/g' -e 's/^-+|-+$//g' | tr '[:upper:]' '[:lower:]')"
   echo "-----> Done!"
   echo "       SSH Access:"
-  echo "         ssh -o 'StrictHostKeyChecking no' root@$ip_address"
+  echo "         ssh -o 'StrictHostKeyChecking no' root@${ISSUE_ID}.dokku.dev"
   echo "       VSCode Access:"
-  echo "         ssh root@$ip_address -A"
+  echo "         ssh root@${ISSUE_ID}.dokku.dev -A"
   echo "       Dokku App Remote:"
-  echo "         git remote add dokku-$remote dokku@$ip_address:app"
+  echo "         git remote add dokku-$remote dokku@${ISSUE_ID}.dokku.dev:app"
 }
 
 main "$@"

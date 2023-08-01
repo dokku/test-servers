@@ -23,11 +23,14 @@ cd /tmp || exit 1
 unzip /tmp/build.zip
 export DEBIAN_FRONTEND=noninteractive
 echo "dokku dokku/vhost_enable boolean true" | sudo debconf-set-selections
-echo "dokku dokku/hostname string $(wget -qO- https://ipinfo.io/ip).sslip.io" | sudo debconf-set-selections
+echo "dokku dokku/hostname string ISSUE_ID.dokku.dev" | sudo debconf-set-selections
 echo "dokku dokku/skip_key_file boolean false" | sudo debconf-set-selections
 echo "dokku dokku/key_file string /root/.ssh/authorized_keys" | sudo debconf-set-selections
 echo "dokku dokku/nginx_enable boolean true" | sudo debconf-set-selections
 sudo apt-get -qq -y install /tmp/dokku_*amd64.deb
+
+# setup letsencrypt
+sudo dokku plugin:install https://github.com/dokku/dokku-letsencrypt.git
 
 # install test devtools
 pushd /root/dokku

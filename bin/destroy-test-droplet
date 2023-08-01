@@ -26,6 +26,18 @@ main() {
   echo "=====> destroying droplet"
   curl -X DELETE -H "Content-Type: application/json" -H "Authorization: Bearer $DIGITALOCEAN_TOKEN" "https://api.digitalocean.com/v2/droplets/${droplet_id}"
   echo "=====> droplet destroyed!"
+
+  echo "=====> deleting dns records"
+  ip_address="$(echo "$response" | jq -r '.droplets[0].networks.v4[] | select(.type == "public") | .ip_address')"
+  wildcard='*'
+  route53_json='{"Comment": "UPSERT a record", "Changes": [{"Action": "DELETE","ResourceRecordSet": {"Name": "a.dokku.dev","Type": "A","TTL": 300,"ResourceRecords": [{ "Value": "127.0.0.1"}]}}, {"Action": "DELETE","ResourceRecordSet": {"Name": "*.a.dokku.dev","Type": "A","TTL": 300,"ResourceRecords": [{ "Value": "127.0.0.1"}]}}]}'
+  route53_json="$(echo "$route53_json" | jq --arg value "${ISSUE_ID}.dokku.dev" '.Changes[0].ResourceRecordSet.Name = $value')"
+  route53_json="$(echo "$route53_json" | jq --arg value "${wildcard}.${ISSUE_ID}.dokku.dev" '.Changes[1].ResourceRecordSet.Name = $value')"
+  route53_json="$(echo "$route53_json" | jq --arg value "$ip_address" '.Changes[].ResourceRecordSet.ResourceRecords[].Value = $value')"
+  hosted_zone_id="$(aws route53 list-hosted-zones-by-name --dns-name dokku.dev --query "HostedZones[?Name=='dokku.dev.'].Id" --output text | cut -d '/' -f3)"
+
+  aws route53 change-resource-record-sets --hosted-zone-id "$hosted_zone_id" --change-batch "$route53_json" --output text
+  echo "=====> dns records deleted!"
 }
 
 main "$@"
