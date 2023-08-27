@@ -74,7 +74,7 @@ main() {
 
   droplet_json='{}'
   droplet_json="$(echo "$droplet_json" | jq --arg value "issue-${ISSUE_ID}" '. + {name: $value}')"
-  droplet_json="$(echo "$droplet_json" | jq --arg value "s-1vcpu-1gb" '. + {size: $value}')"
+  droplet_json="$(echo "$droplet_json" | jq --arg value "s-4vcpu-8gb" '. + {size: $value}')"
   droplet_json="$(echo "$droplet_json" | jq --arg value "nyc1" '. + {region: $value}')"
   droplet_json="$(echo "$droplet_json" | jq --arg value "ubuntu-22-04-x64" '. + {image: $value}')"
   droplet_json="$(echo "$droplet_json" | jq --arg value "$DIGITALOCEAN_VPC_UUID" '. + {vpc_uuid: $value}')"
