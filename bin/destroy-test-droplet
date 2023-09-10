@@ -35,8 +35,8 @@ main() {
   route53_json="$(echo "$route53_json" | jq --arg value "${wildcard}.${ISSUE_ID}.dokku.dev" '.Changes[1].ResourceRecordSet.Name = $value')"
   route53_json="$(echo "$route53_json" | jq --arg value "$ip_address" '.Changes[].ResourceRecordSet.ResourceRecords[].Value = $value')"
   hosted_zone_id="$(aws route53 list-hosted-zones-by-name --dns-name dokku.dev --query "HostedZones[?Name=='dokku.dev.'].Id" --output text | cut -d '/' -f3)"
+  aws route53 change-resource-record-sets --hosted-zone-id "$hosted_zone_id" --change-batch "$route53_json" --output text | sed "s/^/       /"
 
-  aws route53 change-resource-record-sets --hosted-zone-id "$hosted_zone_id" --change-batch "$route53_json" --output text
   echo "=====> dns records deleted!"
 }
 
