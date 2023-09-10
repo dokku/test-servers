@@ -116,6 +116,7 @@ main() {
       echo "=====> creating dns records"
       wildcard='*'
       route53_json='{"Comment": "UPSERT a record", "Changes": [{"Action": "UPSERT","ResourceRecordSet": {"Name": "a.dokku.dev","Type": "A","TTL": 300,"ResourceRecords": [{ "Value": "127.0.0.1"}]}}, {"Action": "UPSERT","ResourceRecordSet": {"Name": "*.a.dokku.dev","Type": "A","TTL": 300,"ResourceRecords": [{ "Value": "127.0.0.1"}]}}]}'
+      route53_json="$(echo "$route53_json" | jq --arg value "Create records for ${ISSUE_ID}.dokku.dev" '.Comment = $value')"
       route53_json="$(echo "$route53_json" | jq --arg value "${ISSUE_ID}.dokku.dev" '.Changes[0].ResourceRecordSet.Name = $value')"
       route53_json="$(echo "$route53_json" | jq --arg value "${wildcard}.${ISSUE_ID}.dokku.dev" '.Changes[1].ResourceRecordSet.Name = $value')"
       route53_json="$(echo "$route53_json" | jq --arg value "$ip_address" '.Changes[].ResourceRecordSet.ResourceRecords[].Value = $value')"
