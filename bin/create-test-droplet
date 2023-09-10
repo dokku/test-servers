@@ -147,7 +147,7 @@ main() {
   echo "       SSH Access:"
   echo "         ssh -o 'StrictHostKeyChecking no' root@${ISSUE_ID}.dokku.dev"
   echo "       VSCode Access:"
-  echo "         ssh -o 'StrictHostKeyChecking no' root@${ISSUE_ID}.dokku.dev -A"
+  echo "         ssh -o 'StrictHostKeyChecking=no' root@${ISSUE_ID}.dokku.dev -A"
   echo "       Dokku App Remote:"
   echo "         git remote add dokku-$remote dokku@${ISSUE_ID}.dokku.dev:app"
 }
