@@ -3,7 +3,10 @@ set -eo pipefail
 set -x
 
 sudo apt-get update -qq >/dev/null
-sudo apt-get -qq -y --no-install-recommends install apt-transport-https build-essential git unzip
+sudo apt-get -qq -y --no-install-recommends install apt-transport-https bat build-essential git unzip
+sudo apt-add-repository -y ppa:zanchey/asciinema
+sudo apt-get update -qq >/dev/null
+sudo apt-get install -y asciinema
 
 # clone the repo
 dokku_clone_root="/root/go/src/github.com/dokku/dokku"
